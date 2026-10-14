@@ -52,6 +52,7 @@ const isWeChat =
 const previewSrc = ref('')
 const showPreview = ref(false)
 const previewHint = ref('')
+const generating = ref(false)
 
 const catMap = Object.fromEntries(categories.map((c) => [c.key, c]))
 
@@ -79,19 +80,25 @@ function closeQuote() {
   selected.value = null
   showPreview.value = false
   previewHint.value = ''
+  generating.value = false
 }
 
 // 生成可分享图片并展示（桌面端直接显示图片，移动端供长按保存/拷贝）
 async function generateShareImage(quote) {
-  const canvas = await buildQuoteCanvas(quote, isWeChat ? 1 : 2)
-  previewSrc.value = isWeChat ? canvasToDataURL(canvas) : await canvasToPreviewURL(canvas)
-  showPreview.value = true
-  if (isTouch) {
-    previewHint.value = isWeChat
-      ? '长按图片「保存到相册 / 发送给朋友」'
-      : '长按图片「存储到照片 / 拷贝」'
-  } else {
-    previewHint.value = '上方为可分享图片，可复制或保存'
+  generating.value = true
+  try {
+    const canvas = await buildQuoteCanvas(quote, isWeChat ? 1 : 2)
+    previewSrc.value = isWeChat ? canvasToDataURL(canvas) : await canvasToPreviewURL(canvas)
+    showPreview.value = true
+    if (isTouch) {
+      previewHint.value = isWeChat
+        ? '长按图片「保存到相册 / 发送给朋友」'
+        : '长按图片「存储到照片 / 拷贝」'
+    } else {
+      previewHint.value = '上方为可分享图片，可复制或保存'
+    }
+  } finally {
+    generating.value = false
   }
 }
 
@@ -232,18 +239,15 @@ onMounted(() => {
           <button class="close" @click="closeQuote">✕</button>
 
           <div class="modal-body">
-            <div v-if="showPreview" class="preview-wrap">
-              <img v-if="previewSrc" :src="previewSrc" alt="语录卡片" class="preview-img" />
-              <p class="preview-hint">{{ previewHint || '长按上方图片即可保存或拷贝' }}</p>
-            </div>
-
-            <div class="bigcard" :style="{ '--accent': accent(selected.category) }">
-              <div class="bigcard-top">
-                <span class="dot"></span>
-                <span class="cat">{{ catOf(selected.category).name }}</span>
+            <div v-if="generating || showPreview" class="preview-wrap">
+              <div v-if="generating" class="loading">
+                <span class="spinner"></span>
+                <span class="loading-text">正在生成分享图片…</span>
               </div>
-              <p class="bigquote">{{ selected.text }}</p>
-              <p class="bigsource">{{ selected.source }}</p>
+              <template v-else>
+                <img v-if="previewSrc" :src="previewSrc" alt="语录卡片" class="preview-img" />
+                <p class="preview-hint">{{ previewHint || '长按上方图片即可保存或拷贝' }}</p>
+              </template>
             </div>
 
             <div class="actions">
@@ -567,47 +571,6 @@ onMounted(() => {
   box-shadow: var(--shadow);
   z-index: 2;
 }
-.bigcard {
-  --accent: var(--gold);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 38px 34px 30px;
-  border-top: 4px solid var(--accent);
-  box-shadow: var(--shadow);
-}
-.bigcard-top {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 22px;
-}
-.bigquote {
-  font-family: var(--serif);
-  font-size: 27px;
-  line-height: 1.9;
-  color: var(--ink);
-  letter-spacing: 0.01em;
-  position: relative;
-  padding-left: 18px;
-}
-.bigquote::before {
-  content: '“';
-  position: absolute;
-  left: -10px;
-  top: -14px;
-  font-family: var(--serif);
-  font-size: 60px;
-  color: rgba(184, 136, 31, 0.35);
-  line-height: 1;
-}
-.bigsource {
-  margin-top: 24px;
-  font-size: 14px;
-  color: var(--ink-faint);
-  text-align: right;
-  font-family: var(--serif);
-}
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -649,6 +612,31 @@ onMounted(() => {
   -webkit-touch-callout: default;
   user-select: none;
 }
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 46px 0;
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid rgba(184, 136, 31, 0.22);
+  border-top-color: var(--gold);
+  animation: spin 0.8s linear infinite;
+}
+.loading-text {
+  font-size: 13px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 /* Toast */
 .toast {
@@ -687,9 +675,6 @@ onMounted(() => {
 @media (max-width: 600px) {
   .grid {
     grid-template-columns: 1fr;
-  }
-  .bigquote {
-    font-size: 23px;
   }
 }
 </style>
