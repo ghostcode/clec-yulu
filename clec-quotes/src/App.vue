@@ -159,7 +159,10 @@ onMounted(() => {
   const id = new URLSearchParams(location.search).get('q')
   if (id) {
     const item = quotes.find((q) => String(q.id) === String(id))
-    if (item) selected.value = item
+    if (item) {
+      selected.value = item
+      generateShareImage(item)
+    }
   }
 })
 </script>
