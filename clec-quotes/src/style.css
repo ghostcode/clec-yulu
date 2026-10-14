@@ -1,0 +1,75 @@
+:root {
+  /* 墨金 · 宣纸主题 */
+  --paper: #f4ecd8;
+  --paper-2: #efe4cb;
+  --ink: #211a12;
+  --ink-soft: #4a3f30;
+  --ink-faint: #8a7a5f;
+  --gold: #b8881f;
+  --gold-bright: #d4a935;
+  --seal: #9e2b25;
+  --line: rgba(33, 26, 18, 0.12);
+  --card: #fbf6e9;
+  --shadow: 0 10px 30px rgba(40, 28, 12, 0.12);
+  --shadow-soft: 0 4px 14px rgba(40, 28, 12, 0.08);
+  --serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', serif;
+  --sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  background-color: var(--paper);
+  /* 宣纸纹理：叠加细微噪点与暖色渐变 */
+  background-image:
+    radial-gradient(circle at 18% 20%, rgba(184, 136, 31, 0.06), transparent 45%),
+    radial-gradient(circle at 82% 78%, rgba(158, 43, 37, 0.05), transparent 45%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-attachment: fixed;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(184, 136, 31, 0.25);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+}
+
+a {
+  color: var(--gold);
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(33, 26, 18, 0.2);
+  border-radius: 6px;
+}
