@@ -51,6 +51,7 @@ const isWeChat =
 // 移动端图片预览（长按保存/拷贝）
 const previewSrc = ref('')
 const showPreview = ref(false)
+const previewHint = ref('')
 
 const catMap = Object.fromEntries(categories.map((c) => [c.key, c]))
 
@@ -70,11 +71,28 @@ function catOf(key) {
 
 function openQuote(item) {
   selected.value = item
+  // 点击卡片即生成可分享图片（带二维码），移动端长按、桌面端配按钮
+  generateShareImage(item)
 }
 
 function closeQuote() {
   selected.value = null
   showPreview.value = false
+  previewHint.value = ''
+}
+
+// 生成可分享图片并展示（桌面端直接显示图片，移动端供长按保存/拷贝）
+async function generateShareImage(quote) {
+  const canvas = await buildQuoteCanvas(quote, isWeChat ? 1 : 2)
+  previewSrc.value = isWeChat ? canvasToDataURL(canvas) : await canvasToPreviewURL(canvas)
+  showPreview.value = true
+  if (isTouch) {
+    previewHint.value = isWeChat
+      ? '长按图片「保存到相册 / 发送给朋友」'
+      : '长按图片「存储到照片 / 拷贝」'
+  } else {
+    previewHint.value = '上方为可分享图片，可复制或保存'
+  }
 }
 
 function pickRandom() {
@@ -95,22 +113,14 @@ async function copyText() {
   showToast(ok ? '已复制语录文字 ✓' : '复制失败，请长按文字手动复制')
 }
 
-// 触屏端：展示语录图片，由用户长按保存/拷贝
-async function showImagePreview(quote, hint) {
-  // 微信只识别 data: 图片，其它移动端用 blob: 更省内存
-  const canvas = await buildQuoteCanvas(quote, isWeChat ? 1 : 2)
-  previewSrc.value = isWeChat ? canvasToDataURL(canvas) : await canvasToPreviewURL(canvas)
-  showPreview.value = true
-  showToast(hint)
-}
-
 async function copyImage() {
   if (!selected.value) return
   if (isTouch) {
-    await showImagePreview(
-      selected.value,
-      isWeChat ? '长按图片可「拷贝 / 发送给朋友」' : '请长按图片选择「拷贝」'
-    )
+    // 图片已展示，提示用户长按拷贝
+    previewHint.value = isWeChat
+      ? '长按图片可「拷贝 / 发送给朋友」'
+      : '请长按图片选择「拷贝」'
+    showToast(previewHint.value)
     return
   }
   const canvas = await buildQuoteCanvas(selected.value)
@@ -122,10 +132,11 @@ async function copyImage() {
 async function saveImage() {
   if (!selected.value) return
   if (isTouch) {
-    await showImagePreview(
-      selected.value,
-      isWeChat ? '长按图片「保存到相册」' : '请长按图片「存储到照片」'
-    )
+    // 图片已展示，提示用户长按保存
+    previewHint.value = isWeChat
+      ? '长按图片「保存到相册」'
+      : '请长按图片「存储到照片」'
+    showToast(previewHint.value)
     return
   }
   const canvas = await buildQuoteCanvas(selected.value)
@@ -221,6 +232,11 @@ onMounted(() => {
           <button class="close" @click="closeQuote">✕</button>
 
           <div class="modal-body">
+            <div v-if="showPreview" class="preview-wrap">
+              <img v-if="previewSrc" :src="previewSrc" alt="语录卡片" class="preview-img" />
+              <p class="preview-hint">{{ previewHint || '长按上方图片即可保存或拷贝' }}</p>
+            </div>
+
             <div class="bigcard" :style="{ '--accent': accent(selected.category) }">
               <div class="bigcard-top">
                 <span class="dot"></span>
@@ -234,11 +250,6 @@ onMounted(() => {
               <button @click="copyText">复制文字</button>
               <button @click="copyImage">复制图片</button>
               <button @click="saveImage">保存图片</button>
-            </div>
-
-            <div v-if="showPreview" class="preview-wrap">
-              <p class="preview-hint">长按上方图片即可保存或拷贝</p>
-              <img v-if="previewSrc" :src="previewSrc" alt="语录卡片" class="preview-img" />
             </div>
           </div>
         </div>
