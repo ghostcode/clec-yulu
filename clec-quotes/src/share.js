@@ -139,10 +139,26 @@ export function canvasToBlob(canvas) {
 }
 
 export function downloadCanvas(canvas, filename = 'clec-quote.png') {
-  const a = document.createElement('a')
-  a.download = filename
-  a.href = canvas.toDataURL('image/png')
-  a.click()
+  canvas.toBlob((blob) => {
+    if (!blob) return
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }, 'image/png')
+}
+
+// 生成可长按保存/复制的图片地址（移动端标准做法）
+export function canvasToPreviewURL(canvas) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob ? URL.createObjectURL(blob) : '')
+    }, 'image/png')
+  })
 }
 
 export async function copyImageToClipboard(canvas) {

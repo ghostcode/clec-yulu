@@ -24,6 +24,7 @@ function countOf(key) {
 import {
   buildQuoteCanvas,
   downloadCanvas,
+  canvasToPreviewURL,
   copyImageToClipboard,
   quoteShareText,
 } from './share.js'
@@ -33,6 +34,16 @@ const activeCat = ref(null)
 const selected = ref(null)
 const toast = ref('')
 let toastTimer = null
+
+// 移动端检测：触屏设备不支持 <a download> 与图片剪贴板，改用长按保存
+const isTouch =
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ||
+    'ontouchstart' in window)
+
+// 移动端图片预览（长按保存/拷贝）
+const previewSrc = ref('')
+const showPreview = ref(false)
 
 const catMap = Object.fromEntries(categories.map((c) => [c.key, c]))
 
@@ -56,6 +67,7 @@ function openQuote(item) {
 
 function closeQuote() {
   selected.value = null
+  showPreview.value = false
 }
 
 function pickRandom() {
@@ -83,14 +95,28 @@ async function copyText() {
 async function copyImage() {
   if (!selected.value) return
   const canvas = buildQuoteCanvas(selected.value)
+  // 移动端无法写入图片剪贴板，改为展示图片由用户长按拷贝
+  if (isTouch) {
+    previewSrc.value = await canvasToPreviewURL(canvas)
+    showPreview.value = true
+    showToast('请长按图片选择「拷贝」')
+    return
+  }
   const ok = await copyImageToClipboard(canvas)
   showToast(ok ? '已复制图片到剪贴板 ✓' : '当前环境不支持复制图片，已改为下载')
   if (!ok) downloadCanvas(canvas, `clec-quote-${selected.value.id}.png`)
 }
 
-function saveImage() {
+async function saveImage() {
   if (!selected.value) return
   const canvas = buildQuoteCanvas(selected.value)
+  // 移动端不支持 <a download>，改为展示图片由用户长按保存
+  if (isTouch) {
+    previewSrc.value = await canvasToPreviewURL(canvas)
+    showPreview.value = true
+    showToast('请长按图片「存储到照片」')
+    return
+  }
   downloadCanvas(canvas, `clec-quote-${selected.value.id}.png`)
   showToast('图片已保存 ✓')
 }
@@ -184,6 +210,11 @@ watch(selected, (v) => {
               <button @click="copyText">复制文字</button>
               <button @click="copyImage">复制图片</button>
               <button @click="saveImage">保存图片</button>
+            </div>
+
+            <div v-if="showPreview" class="preview-wrap">
+              <p class="preview-hint">长按上方图片即可保存或拷贝</p>
+              <img v-if="previewSrc" :src="previewSrc" alt="语录卡片" class="preview-img" />
             </div>
           </div>
         </div>
@@ -548,6 +579,26 @@ watch(selected, (v) => {
   border-color: var(--gold);
   color: var(--gold);
   transform: translateY(-1px);
+}
+
+/* 移动端图片预览（长按保存/拷贝） */
+.preview-wrap {
+  margin-top: 18px;
+  text-align: center;
+}
+.preview-hint {
+  font-size: 13px;
+  color: var(--ink-faint);
+  margin-bottom: 12px;
+  letter-spacing: 0.04em;
+}
+.preview-img {
+  max-width: 100%;
+  border-radius: 12px;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid var(--line);
+  -webkit-touch-callout: default;
+  user-select: none;
 }
 
 /* Toast */
