@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { quotes, categories } from './quotes.js'
 
 // 分类配色（墨金体系内的低饱和点缀色）
@@ -25,7 +25,9 @@ import {
   buildQuoteCanvas,
   downloadCanvas,
   canvasToPreviewURL,
+  canvasToDataURL,
   copyImageToClipboard,
+  copyTextToClipboard,
   quoteShareText,
 } from './share.js'
 
@@ -40,6 +42,11 @@ const isTouch =
   typeof window !== 'undefined' &&
   (window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ||
     'ontouchstart' in window)
+
+// 微信环境：长按保存只识别 data: 图片，且文字需 execCommand 降级
+const isWeChat =
+  typeof navigator !== 'undefined' &&
+  /MicroMessenger/i.test(navigator.userAgent || '')
 
 // 移动端图片预览（长按保存/拷贝）
 const previewSrc = ref('')
@@ -84,24 +91,29 @@ function showToast(msg) {
 
 async function copyText() {
   if (!selected.value) return
-  try {
-    await navigator.clipboard.writeText(quoteShareText(selected.value))
-    showToast('已复制语录文字 ✓')
-  } catch {
-    showToast('复制失败，请手动选择')
-  }
+  const ok = await copyTextToClipboard(quoteShareText(selected.value))
+  showToast(ok ? '已复制语录文字 ✓' : '复制失败，请长按文字手动复制')
+}
+
+// 触屏端：展示语录图片，由用户长按保存/拷贝
+async function showImagePreview(quote, hint) {
+  // 微信只识别 data: 图片，其它移动端用 blob: 更省内存
+  const canvas = await buildQuoteCanvas(quote, isWeChat ? 1 : 2)
+  previewSrc.value = isWeChat ? canvasToDataURL(canvas) : await canvasToPreviewURL(canvas)
+  showPreview.value = true
+  showToast(hint)
 }
 
 async function copyImage() {
   if (!selected.value) return
-  const canvas = buildQuoteCanvas(selected.value)
-  // 移动端无法写入图片剪贴板，改为展示图片由用户长按拷贝
   if (isTouch) {
-    previewSrc.value = await canvasToPreviewURL(canvas)
-    showPreview.value = true
-    showToast('请长按图片选择「拷贝」')
+    await showImagePreview(
+      selected.value,
+      isWeChat ? '长按图片可「拷贝 / 发送给朋友」' : '请长按图片选择「拷贝」'
+    )
     return
   }
+  const canvas = await buildQuoteCanvas(selected.value)
   const ok = await copyImageToClipboard(canvas)
   showToast(ok ? '已复制图片到剪贴板 ✓' : '当前环境不支持复制图片，已改为下载')
   if (!ok) downloadCanvas(canvas, `clec-quote-${selected.value.id}.png`)
@@ -109,20 +121,28 @@ async function copyImage() {
 
 async function saveImage() {
   if (!selected.value) return
-  const canvas = buildQuoteCanvas(selected.value)
-  // 移动端不支持 <a download>，改为展示图片由用户长按保存
   if (isTouch) {
-    previewSrc.value = await canvasToPreviewURL(canvas)
-    showPreview.value = true
-    showToast('请长按图片「存储到照片」')
+    await showImagePreview(
+      selected.value,
+      isWeChat ? '长按图片「保存到相册」' : '请长按图片「存储到照片」'
+    )
     return
   }
+  const canvas = await buildQuoteCanvas(selected.value)
   downloadCanvas(canvas, `clec-quote-${selected.value.id}.png`)
   showToast('图片已保存 ✓')
 }
 
 watch(selected, (v) => {
   document.body.style.overflow = v ? 'hidden' : ''
+})
+
+onMounted(() => {
+  const id = new URLSearchParams(location.search).get('q')
+  if (id) {
+    const item = quotes.find((q) => String(q.id) === String(id))
+    if (item) selected.value = item
+  }
 })
 </script>
 

@@ -1,4 +1,5 @@
 // 语录分享工具：Canvas 生成图片、复制文字、复制/保存图片
+import QRCode from 'qrcode'
 import { categories } from './quotes.js'
 
 const PAPER = '#f4ecd8'
@@ -28,8 +29,8 @@ function wrapText(ctx, text, maxWidth) {
   return lines
 }
 
-// 生成语录卡片图片（返回 canvas）
-export function buildQuoteCanvas(quote, scale = 2) {
+// 生成语录卡片图片（返回 canvas，含二维码）
+export async function buildQuoteCanvas(quote, scale = 2) {
   const W = 1080
   const H = 1350
   const canvas = document.createElement('canvas')
@@ -105,21 +106,40 @@ export function buildQuoteCanvas(quote, scale = 2) {
     y += lineH
   }
 
-  // 出处
+  // 出处（二维码上方）
   ctx.fillStyle = INK_SOFT
   ctx.font = '400 26px "Noto Serif SC", serif'
-  ctx.fillText(quote.source || '', W / 2, H - M - 96)
+  ctx.fillText(quote.source || '', W / 2, H - 360)
 
-  // 底部分隔线 + 品牌
-  ctx.strokeStyle = 'rgba(33,26,18,0.15)'
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.moveTo(W / 2 - 60, H - M - 70)
-  ctx.lineTo(W / 2 + 60, H - M - 70)
+  // 底部二维码卡片
+  const qrSize = 184
+  const cardSize = qrSize + 26
+  const cardX = W / 2 - cardSize / 2
+  const cardY = H - M - 70 - cardSize
+  roundRect(ctx, cardX, cardY, cardSize, cardSize, 16)
+  ctx.fillStyle = '#ffffff'
+  ctx.fill()
+  // 描边
+  ctx.strokeStyle = 'rgba(184,136,31,0.45)'
+  ctx.lineWidth = 1.5
   ctx.stroke()
+
+  // 生成二维码（指向该语录网页）
+  const base =
+    typeof location !== 'undefined' ? location.origin + location.pathname : ''
+  const qrURL = `${base}?q=${quote.id}`
+  const qrCanvas = document.createElement('canvas')
+  await QRCode.toCanvas(qrCanvas, qrURL, {
+    margin: 1,
+    width: qrSize,
+    color: { dark: '#1a1410', light: '#ffffff' },
+  })
+  ctx.drawImage(qrCanvas, W / 2 - qrSize / 2, cardY + 13, qrSize, qrSize)
+
+  // 二维码说明
   ctx.fillStyle = INK_FAINT
-  ctx.font = '400 22px "Noto Sans SC", sans-serif'
-  ctx.fillText('理财圣经 CLEC 版 · CLEC 宝典', W / 2, H - M - 42)
+  ctx.font = '500 24px "Noto Sans SC", sans-serif'
+  ctx.fillText('扫码阅读更多 CLEC 投资语录', W / 2, cardY + cardSize + 34)
 
   return canvas
 }
@@ -172,4 +192,41 @@ export async function copyImageToClipboard(canvas) {
 
 export function quoteShareText(quote) {
   return `“${quote.text}”\n—— ${quote.source}\n\n#投资语录 #CLEC理财圣经`
+}
+
+// 复制文字：优先 Clipboard API，失败降级到 execCommand（兼容微信等 WebView）
+export async function copyTextToClipboard(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch (e) {
+    /* 继续降级 */
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.top = '-9999px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand('copy')
+    ta.remove()
+    return ok
+  } catch (e) {
+    return false
+  }
+}
+
+// 生成 data: URL —— 微信 WebView 长按「保存到相册」只识别 data: 地址，blob: 不被识别
+export function canvasToDataURL(canvas) {
+  try {
+    return canvas.toDataURL('image/png')
+  } catch (e) {
+    return ''
+  }
 }
