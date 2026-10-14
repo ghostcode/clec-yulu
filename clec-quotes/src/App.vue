@@ -207,6 +207,10 @@ onMounted(() => {
 
     <footer class="foot">
       <p>语录选自《理财圣经 CLEC 版 v3.4.1》与《CLEC 宝典 V1.14.2》</p>
+      <p class="links">
+        友情链接：
+        <a href="https://clec168.com/" target="_blank" rel="noopener noreferrer">CLEC 官网</a>
+      </p>
       <p class="disclaim">内容仅供学习与投资教育探讨，不构成任何投资建议。</p>
     </footer>
 
@@ -495,6 +499,20 @@ onMounted(() => {
   color: var(--ink-faint);
   font-size: 13px;
   line-height: 1.9;
+}
+.foot .links {
+  margin: 6px 0;
+}
+.foot .links a {
+  color: var(--gold);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(184, 136, 31, 0.45);
+  padding-bottom: 1px;
+  transition: color 0.2s, border-color 0.2s;
+}
+.foot .links a:hover {
+  color: var(--seal);
+  border-color: var(--seal);
 }
 .foot .disclaim {
   font-size: 11.5px;
