@@ -53,6 +53,46 @@ const previewSrc = ref('')
 const showPreview = ref(false)
 const previewHint = ref('')
 const generating = ref(false)
+// 分享图是否包含二维码
+const showQR = ref(true)
+
+// 生成图缓存：按「语录ID + 是否显示二维码」缓存 canvas，避免来回切换开关重复绘制/生成二维码
+const canvasCache = new Map() // key: `${id}:${qr}` -> canvas
+const srcCache = new Map() // key: `${id}:${qr}:${wechat}` -> 预览地址
+const blobURLs = new Set() // 已创建的 blob: 地址，关闭时统一释放
+
+const cacheKey = (quote, qr) => `${quote.id}:${qr ? 1 : 0}`
+const srcKey = (quote, qr) => `${quote.id}:${qr ? 1 : 0}:${isWeChat ? 1 : 0}`
+
+async function getCanvas(quote, qr) {
+  const k = cacheKey(quote, qr)
+  if (canvasCache.has(k)) return canvasCache.get(k)
+  const canvas = await buildQuoteCanvas(quote, { scale: isWeChat ? 1 : 2, showQR: qr })
+  canvasCache.set(k, canvas)
+  return canvas
+}
+
+async function getPreviewSrc(quote, qr) {
+  const k = srcKey(quote, qr)
+  if (srcCache.has(k)) return srcCache.get(k)
+  const canvas = await getCanvas(quote, qr)
+  let src
+  if (isWeChat) {
+    src = canvasToDataURL(canvas)
+  } else {
+    src = await canvasToPreviewURL(canvas)
+    if (src) blobURLs.add(src)
+  }
+  srcCache.set(k, src)
+  return src
+}
+
+function clearImageCache() {
+  blobURLs.forEach((u) => URL.revokeObjectURL(u))
+  blobURLs.clear()
+  canvasCache.clear()
+  srcCache.clear()
+}
 
 const catMap = Object.fromEntries(categories.map((c) => [c.key, c]))
 
@@ -81,22 +121,39 @@ function closeQuote() {
   showPreview.value = false
   previewHint.value = ''
   generating.value = false
+  clearImageCache()
 }
 
-// 生成可分享图片并展示（桌面端直接显示图片，移动端供长按保存/拷贝）
+// 切换二维码显隐，优先复用已缓存的图片
+function toggleQR() {
+  showQR.value = !showQR.value
+  if (selected.value) generateShareImage(selected.value)
+}
+
+function setPreviewHint() {
+  if (isTouch) {
+    previewHint.value = isWeChat
+      ? '长按图片「保存到相册 / 发送给朋友」'
+      : '长按图片「存储到照片 / 拷贝」'
+  } else {
+    previewHint.value = '上方为可分享图片，可复制或保存'
+  }
+}
+
+// 生成可分享图片并展示（命中缓存则直接复用，无需重新绘制/生成二维码）
 async function generateShareImage(quote) {
+  const key = srcKey(quote, showQR.value)
+  if (srcCache.has(key)) {
+    previewSrc.value = srcCache.get(key)
+    showPreview.value = true
+    setPreviewHint()
+    return
+  }
   generating.value = true
   try {
-    const canvas = await buildQuoteCanvas(quote, isWeChat ? 1 : 2)
-    previewSrc.value = isWeChat ? canvasToDataURL(canvas) : await canvasToPreviewURL(canvas)
+    previewSrc.value = await getPreviewSrc(quote, showQR.value)
     showPreview.value = true
-    if (isTouch) {
-      previewHint.value = isWeChat
-        ? '长按图片「保存到相册 / 发送给朋友」'
-        : '长按图片「存储到照片 / 拷贝」'
-    } else {
-      previewHint.value = '上方为可分享图片，可复制或保存'
-    }
+    setPreviewHint()
   } finally {
     generating.value = false
   }
@@ -130,7 +187,7 @@ async function copyImage() {
     showToast(previewHint.value)
     return
   }
-  const canvas = await buildQuoteCanvas(selected.value)
+  const canvas = await getCanvas(selected.value, showQR.value)
   const ok = await copyImageToClipboard(canvas)
   showToast(ok ? '已复制图片到剪贴板 ✓' : '当前环境不支持复制图片，已改为下载')
   if (!ok) downloadCanvas(canvas, `clec-quote-${selected.value.id}.png`)
@@ -146,7 +203,7 @@ async function saveImage() {
     showToast(previewHint.value)
     return
   }
-  const canvas = await buildQuoteCanvas(selected.value)
+  const canvas = await getCanvas(selected.value, showQR.value)
   downloadCanvas(canvas, `clec-quote-${selected.value.id}.png`)
   showToast('图片已保存 ✓')
 }
@@ -251,6 +308,19 @@ onMounted(() => {
                 <img v-if="previewSrc" :src="previewSrc" alt="语录卡片" class="preview-img" />
                 <p class="preview-hint">{{ previewHint || '长按上方图片即可保存或拷贝' }}</p>
               </template>
+            </div>
+
+            <div class="qr-row">
+              <span class="qr-label">显示二维码</span>
+              <button
+                class="switch"
+                :class="{ on: showQR }"
+                role="switch"
+                :aria-checked="showQR"
+                @click="toggleQR"
+              >
+                <span class="knob"></span>
+              </button>
             </div>
 
             <div class="actions">
@@ -614,6 +684,47 @@ onMounted(() => {
   border: 1px solid var(--line);
   -webkit-touch-callout: default;
   user-select: none;
+}
+
+/* 二维码开关 */
+.qr-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.qr-label {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 13px;
+  border: none;
+  background: #d8cdb4;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.22s ease;
+}
+.switch.on {
+  background: var(--gold);
+}
+.switch .knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.22s ease;
+}
+.switch.on .knob {
+  transform: translateX(20px);
 }
 .loading {
   display: flex;

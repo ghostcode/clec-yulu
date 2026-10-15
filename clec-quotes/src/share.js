@@ -30,7 +30,8 @@ function wrapText(ctx, text, maxWidth) {
 }
 
 // 生成语录卡片图片（返回 canvas，含二维码）
-export async function buildQuoteCanvas(quote, scale = 2) {
+// opts.showQR: 是否绘制底部二维码（默认 true）
+export async function buildQuoteCanvas(quote, { scale = 2, showQR = true } = {}) {
   const W = 1080
   const H = 1350
   const canvas = document.createElement('canvas')
@@ -106,40 +107,51 @@ export async function buildQuoteCanvas(quote, scale = 2) {
     y += lineH
   }
 
-  // 出处（二维码上方）
-  ctx.fillStyle = INK_SOFT
-  ctx.font = '400 26px "Noto Serif SC", serif'
-  ctx.fillText(quote.source || '', W / 2, H - 360)
+  // 底部：二维码卡片 / 或仅出处与品牌
+  if (showQR) {
+    // 出处（二维码上方）
+    ctx.fillStyle = INK_SOFT
+    ctx.font = '400 26px "Noto Serif SC", serif'
+    ctx.fillText(quote.source || '', W / 2, H - 360)
 
-  // 底部二维码卡片
-  const qrSize = 184
-  const cardSize = qrSize + 26
-  const cardX = W / 2 - cardSize / 2
-  const cardY = H - M - 70 - cardSize
-  roundRect(ctx, cardX, cardY, cardSize, cardSize, 16)
-  ctx.fillStyle = '#ffffff'
-  ctx.fill()
-  // 描边
-  ctx.strokeStyle = 'rgba(184,136,31,0.45)'
-  ctx.lineWidth = 1.5
-  ctx.stroke()
+    // 底部二维码卡片
+    const qrSize = 184
+    const cardSize = qrSize + 26
+    const cardX = W / 2 - cardSize / 2
+    const cardY = H - M - 70 - cardSize
+    roundRect(ctx, cardX, cardY, cardSize, cardSize, 16)
+    ctx.fillStyle = '#ffffff'
+    ctx.fill()
+    // 描边
+    ctx.strokeStyle = 'rgba(184,136,31,0.45)'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
 
-  // 生成二维码（指向该语录网页）
-  const base =
-    typeof location !== 'undefined' ? location.origin + location.pathname : ''
-  const qrURL = `${base}?q=${quote.id}`
-  const qrCanvas = document.createElement('canvas')
-  await QRCode.toCanvas(qrCanvas, qrURL, {
-    margin: 1,
-    width: qrSize,
-    color: { dark: '#1a1410', light: '#ffffff' },
-  })
-  ctx.drawImage(qrCanvas, W / 2 - qrSize / 2, cardY + 13, qrSize, qrSize)
+    // 生成二维码（指向该语录网页）
+    const base =
+      typeof location !== 'undefined' ? location.origin + location.pathname : ''
+    const qrURL = `${base}?q=${quote.id}`
+    const qrCanvas = document.createElement('canvas')
+    await QRCode.toCanvas(qrCanvas, qrURL, {
+      margin: 1,
+      width: qrSize,
+      color: { dark: '#1a1410', light: '#ffffff' },
+    })
+    ctx.drawImage(qrCanvas, W / 2 - qrSize / 2, cardY + 13, qrSize, qrSize)
 
-  // 二维码说明
-  ctx.fillStyle = INK_FAINT
-  ctx.font = '500 24px "Noto Sans SC", sans-serif'
-  ctx.fillText('扫码阅读更多 CLEC 投资语录', W / 2, cardY + cardSize + 34)
+    // 二维码说明
+    ctx.fillStyle = INK_FAINT
+    ctx.font = '500 24px "Noto Sans SC", sans-serif'
+    ctx.fillText('扫码阅读更多 CLEC 投资语录', W / 2, cardY + cardSize + 34)
+  } else {
+    // 不显示二维码：出处与品牌放到下部居中
+    ctx.fillStyle = INK_SOFT
+    ctx.font = '400 28px "Noto Serif SC", serif'
+    ctx.fillText(quote.source || '', W / 2, H - 230)
+    ctx.fillStyle = INK_FAINT
+    ctx.font = '500 24px "Noto Sans SC", sans-serif'
+    ctx.fillText('理财圣经 CLEC 版 · CLEC 宝典', W / 2, H - 190)
+  }
 
   return canvas
 }
